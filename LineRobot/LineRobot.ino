@@ -27,13 +27,17 @@ int SpotBackDuration = 100;
 int SpotTurnDuration = 370;
 
 int IN_TurnSpeed = 40;
-////
+
+
+int roundTripDistance = 500; // расстояние в мс
+int roundTripSpeed = 80;    // скорость проезда
 
 bool manualMode = false;
+bool roundTripMode = false;  // флаг режима "туда-обратно"
 
-int* varPointers[] = {&speedForward, &OUT_TurnSpeed, &SpotTurnSpeed, &SpotBackSpeed, &SpotBackDuration, &SpotTurnDuration, &IN_TurnSpeed};
-String varNames[] = {"ForwardSpeed","OUT_TurnSpeed","SpotTurnSpeed","SpotBackSpeed","SpotBackDuration","SpotTurnDuration","IN_TurnSpeed"};
-const int VAR_COUNT = 7;
+int* varPointers[] = {&speedForward, &OUT_TurnSpeed, &SpotTurnSpeed, &SpotBackSpeed, &SpotBackDuration, &SpotTurnDuration, &IN_TurnSpeed, &roundTripDistance, &roundTripSpeed};
+String varNames[] = {"ForwardSpeed","OUT_TurnSpeed","SpotTurnSpeed","SpotBackSpeed","SpotBackDuration","SpotTurnDuration","IN_TurnSpeed","RoundTripDist","RoundTripSpeed"};
+const int VAR_COUNT = 9;
 
 int state = 0;
 int selectedVar = 0;
@@ -152,6 +156,7 @@ void saveAllVariables(){
   printToLCD("Data Saved");
   delay(1000);
 }
+
 void loadAllVariables(){
 
   int addr = 0;
@@ -167,10 +172,44 @@ void loadAllVariables(){
   delay(1000);
 }
 
+void executeRoundTrip() {
+  printToLCD("Going forward...");
+  setForward(roundTripSpeed, roundTripSpeed);
+  delay(roundTripDistance);
+  
+  stopMotors();
+  delay(500);
+  
+  printToLCD("Turning around...");
+  turnRightOnSpot(SpotTurnSpeed);
+  delay(SpotTurnDuration * 2);
+  
+  stopMotors();
+  delay(500);
+  
+  // Возврат назад
+  printToLCD("Going back...");
+  setForward(roundTripSpeed, roundTripSpeed);
+  delay(roundTripDistance);
+  
+  stopMotors();
+  delay(500);
+  
+  // Разворот в исходное положение
+  printToLCD("Final turn...");
+  turnRightOnSpot(SpotTurnSpeed);
+  delay(SpotTurnDuration * 2);
+  
+  stopMotors();
+  printToLCD("Trip complete");
+  delay(1000);
+}
+
 void handleInput(uint32_t code){
 
   if(code==0xBB44FF00 && state!=0){ // ← отмена
     state=0;
+    roundTripMode = false;
     stopMotors();
     printToLCD("Cancelled");
     delay(500);
@@ -221,7 +260,11 @@ void handleInput(uint32_t code){
       printToLCD("Select:"+varNames[selectedVar]);
     }
 
-    
+    if(code==0xE916FF00){ // 1
+      roundTripMode = true;
+      state = 0; // выход из меню
+      return;
+    }
 
     if(code==0xBF40FF00){ // OK
       state=2;
@@ -314,7 +357,13 @@ void loop() {
     handleInput(code);
   }
 
-  // если открыто меню — робот не ездит
+  // туда-обратно
+  if(roundTripMode){
+    executeRoundTrip();
+    roundTripMode = false;
+    return;
+  }
+
   if(state!=0){
     stopMotors();
     return;
